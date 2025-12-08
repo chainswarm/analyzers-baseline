@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0.0",
+  "batch_id": "torus-2025-11-20-300d",
+  "network": "torus",
+  "processing_date": "2025-11-20",
+  "window_days": 300,
+  "generated_at": "2025-12-05T12:50:34.344916Z",
+  "counts": {
+    "transfers": 4144,
+    "address_labels": 131,
+    "ground_truth": 1357
+  },
+  "sha256": {
+    "transfers.parquet": "8db5a526d9954742b2aad5da7c889afa126c5f54c80c4a75d8ce6cccd529d8c0",
+    "address_labels.parquet": "091acb6fb1cb5d817d234a040028d0506bd92469dfab5467853971c42c28c346",
+    "ground_truth.parquet": "18026cdcd147a8f6cd749ca713c1ee981741072086dd5ab183f993239154cf99",
+    "asset_prices.parquet": "3d0ce07e0122f1d0670171dff17797842c274df95b646c12f02e26a94f272729",
+    "assets.parquet": "6835ad7eba67055e7a858c972ec14ff56b63ac069cbec8d86a63e5461198e723"
+  }
+}

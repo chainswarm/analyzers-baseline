@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "analyzers-baseline"
+version = "1.0.0"
+description = "Baseline analytics algorithms for blockchain pattern detection and feature engineering"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "ChainSwarm Team"}
+]
+requires-python = ">=3.13"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # Core - provides clickhouse-connect, loguru, pydantic
+    "chainswarm-core>=0.1.13",
+    # Network analysis
+    "networkx>=3.0",
+    "numpy>=1.24",
+    # Graph analytics
+    "cdlib>=0.4.0",
+    "python-igraph>=0.11.0",
+    "leidenalg>=0.10.0",
+    # Statistical analysis
+    "scipy>=1.11.0",
+    # Data handling
+    "pandas>=2.0",
+    "pyarrow>=14.0",
+    # CLI
+    "click>=8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+]
+
+[project.scripts]
+run-pipeline = "analyzers_baseline.scripts.run_pipeline:main"
+run-features = "analyzers_baseline.scripts.run_features:main"
+run-patterns = "analyzers_baseline.scripts.run_patterns:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
