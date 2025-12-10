@@ -266,8 +266,8 @@ class AddressFeatureAnalyzer:
             'counterparty_concentration': self._calculate_gini_coefficient(
                 list(counterparty_volumes.values())
             ),
-            'concentration_ratio': max(counterparty_volumes.values()) / total_volume 
-                if counterparty_volumes else 0.0,
+            'concentration_ratio': max(counterparty_volumes.values()) / total_volume
+                if counterparty_volumes and total_volume > 0 else 0.0,
             'reciprocity_ratio': reciprocity_ratio,
             'velocity_score': float(min(tx_total / 100.0, 1.0)),
         }
@@ -560,9 +560,17 @@ class AddressFeatureAnalyzer:
         G: nx.DiGraph
     ) -> Dict[str, float]:
         try:
+            # Check if graph has meaningful weights
+            total_weight = sum(
+                data.get('weight', 0) for _, _, data in G.edges(data=True)
+            )
+            if total_weight == 0:
+                # Fallback to unweighted PageRank when USD prices unavailable
+                logger.info("PageRank: zero weights detected, using unweighted computation")
+                return nx.pagerank(G, alpha=0.85)  # No weight parameter
             return nx.pagerank(G, weight='weight', alpha=0.85)
-        except nx.PowerIterationFailedConvergence:
-            logger.warning("PageRank failed to converge, using default values")
+        except (nx.PowerIterationFailedConvergence, ZeroDivisionError) as e:
+            logger.warning(f"PageRank failed: {e}, using default values")
             return {node: 0.0 for node in G.nodes()}
     
     def _compute_betweenness_centrality(
@@ -588,6 +596,14 @@ class AddressFeatureAnalyzer:
         G: nx.DiGraph
     ) -> Dict[str, float]:
         try:
+            # Check if graph has meaningful weights for distance calculation
+            total_weight = sum(
+                data.get('weight', 0) for _, _, data in G.edges(data=True)
+            )
+            if total_weight == 0:
+                # Fallback to unweighted closeness (hop-based distance)
+                logger.info("Closeness centrality: zero weights, using hop-based distance")
+                return nx.closeness_centrality(G)  # No distance parameter
             return nx.closeness_centrality(G, distance='weight')
         except Exception as e:
             logger.warning(f"Closeness centrality failed: {e}")
@@ -608,7 +624,16 @@ class AddressFeatureAnalyzer:
         G: nx.DiGraph
     ) -> Dict[str, float]:
         try:
-            return nx.clustering(G.to_undirected(), weight='weight')
+            G_undirected = G.to_undirected()
+            # Check if graph has meaningful weights
+            total_weight = sum(
+                data.get('weight', 0) for _, _, data in G_undirected.edges(data=True)
+            )
+            if total_weight == 0:
+                # Fallback to unweighted clustering
+                logger.info("Clustering coefficient: zero weights, using unweighted")
+                return nx.clustering(G_undirected)  # No weight parameter
+            return nx.clustering(G_undirected, weight='weight')
         except Exception as e:
             logger.warning(f"Clustering coefficient failed: {e}")
             return {node: 0.0 for node in G.nodes()}
@@ -621,10 +646,23 @@ class AddressFeatureAnalyzer:
             return {node: 0 for node in G.nodes()}
         
         try:
-            coms = cd_algorithms.leiden(G.to_undirected(), weights='weight')
+            G_undirected = G.to_undirected()
+            
+            # Check if graph has meaningful weights
+            total_weight = sum(
+                data.get('weight', 0) for _, _, data in G_undirected.edges(data=True)
+            )
+            
+            if total_weight == 0:
+                # Fallback: use tx_count as weight when USD values unavailable
+                logger.info("Community detection: zero USD weights, using tx_count")
+                for u, v, data in G_undirected.edges(data=True):
+                    data['weight'] = max(data.get('tx_count', 1), 1)
+            
+            coms = cd_algorithms.leiden(G_undirected, weights='weight')
             return {
-                node: i 
-                for i, com in enumerate(coms.communities) 
+                node: i
+                for i, com in enumerate(coms.communities)
                 for node in com
             }
         except Exception as e:

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2025-12-10
+
+### Fixed
+
+- **Zero USD Price Handling** - Fixed multiple ZeroDivisionError crashes when processing networks with missing USD price data
+  - `NetworkDetector._detect_smurfing()`: Added fallback to tx_count as weight when USD values are zero
+  - `AddressFeatureAnalyzer._compute_flow_features()`: Added total_volume > 0 check for concentration_ratio
+  - `AddressFeatureAnalyzer._compute_pagerank()`: Fallback to unweighted PageRank when graph has zero weights
+  - `AddressFeatureAnalyzer._compute_closeness_centrality()`: Fallback to hop-based distance when weights are zero
+  - `AddressFeatureAnalyzer._compute_clustering_coefficient()`: Fallback to unweighted clustering when weights are zero
+  - `AddressFeatureAnalyzer._compute_community_detection()`: Fallback to tx_count as weight for Leiden algorithm
+  - `MotifDetector._calculate_time_concentration()`: Added protection against floating-point edge cases
+
 ## [0.1.0] - 2025-12-08
 
 ### Added

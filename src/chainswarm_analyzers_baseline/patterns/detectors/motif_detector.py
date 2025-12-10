@@ -223,9 +223,10 @@ class MotifDetector(BasePatternDetector):
         std_gap = np.std(gaps)
         
         if mean_gap == 0:
-            return 1.0
+            return 1.0  # All transactions at same time = maximum concentration
         
-        cv = std_gap / mean_gap
+        # Protect against floating point edge cases
+        cv = std_gap / max(mean_gap, 0.001)
         concentration = 1.0 / (1.0 + cv)
         
         return min(concentration, 1.0)

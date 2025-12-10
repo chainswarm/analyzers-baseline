@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chainswarm-analyzers-baseline"
-version = "0.1.0"
+version = "0.1.1"
 description = "Baseline analytics algorithms for blockchain pattern detection and feature engineering"
 readme = "README.md"
 license = {text = "Apache-2.0"}

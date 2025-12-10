@@ -132,6 +132,30 @@ class NetworkDetector(BasePatternDetector):
         density_threshold = self._get_config_value('network_analysis', 'density_threshold', 0.1)
         
         G_undirected = G.to_undirected()
+        
+        # Check if graph has meaningful weights for community detection
+        # NetworkX greedy_modularity_communities requires sum of weights > 0
+        total_weight = sum(
+            data.get('weight', 0) for _, _, data in G_undirected.edges(data=True)
+        )
+        
+        if total_weight == 0:
+            # Fallback: Use tx_count as weight for community detection
+            # This handles cases where USD prices are not available
+            for u, v, data in G_undirected.edges(data=True):
+                data['weight'] = max(data.get('tx_count', 1), 1)
+            
+            total_weight = sum(
+                data.get('weight', 0) for _, _, data in G_undirected.edges(data=True)
+            )
+            
+            if total_weight == 0:
+                # No edges or all zero tx_counts - skip community detection
+                logger.warning("Skipping smurfing detection: graph has no meaningful weights")
+                return []
+            
+            logger.info("Using tx_count as weight for community detection (USD values unavailable)")
+        
         communities = list(nx.community.greedy_modularity_communities(
             G_undirected, weight='weight'
         ))
