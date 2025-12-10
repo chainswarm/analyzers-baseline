@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2025-12-10
+
+### Changed
+
+- **BREAKING**: `ClickHouseAdapter.delete_partition()` has been removed and replaced with two separate methods:
+  - `delete_features_partition(window_days, processing_date)` - Deletes only from `analyzers_features` table
+  - `delete_patterns_partition(window_days, processing_date)` - Deletes only from `analyzers_patterns_*` tables
+  - This prevents unintended data loss when running feature computation and pattern detection sequentially
+
 ## [0.1.1] - 2025-12-10
 
 ### Fixed

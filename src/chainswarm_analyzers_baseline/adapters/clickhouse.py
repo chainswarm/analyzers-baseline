@@ -527,7 +527,8 @@ class ClickHouseAdapter:
         
         return row
     
-    def delete_partition(self, window_days: int, processing_date: str) -> None:
+    def delete_features_partition(self, window_days: int, processing_date: str) -> None:
+        """Delete only features for given window_days and processing_date."""
         date_obj = datetime.strptime(processing_date, '%Y-%m-%d').date()
         
         params = {
@@ -541,6 +542,15 @@ class ClickHouseAdapter:
         """
         self.client.command(query, parameters=params)
         logger.info(f"Deleted features partition for window_days={window_days}, processing_date={processing_date}")
+    
+    def delete_patterns_partition(self, window_days: int, processing_date: str) -> None:
+        """Delete only patterns for given window_days and processing_date."""
+        date_obj = datetime.strptime(processing_date, '%Y-%m-%d').date()
+        
+        params = {
+            'window_days': window_days,
+            'processing_date': date_obj
+        }
         
         unique_tables = set(self.PATTERN_TYPE_TABLES.values())
         for table_name in unique_tables:
@@ -549,4 +559,4 @@ class ClickHouseAdapter:
             DELETE WHERE window_days = %(window_days)s AND processing_date = %(processing_date)s
             """
             self.client.command(query, parameters=params)
-            logger.info(f"Deleted partition from {table_name}")
+            logger.info(f"Deleted patterns partition from {table_name}")
