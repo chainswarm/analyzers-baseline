@@ -2,7 +2,7 @@ import argparse
 import os
 import re
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -141,7 +141,7 @@ def main():
         if args.processing_date:
             processing_date = args.processing_date
         else:
-            processing_date = datetime.now().strftime("%Y-%m-%d")
+            processing_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         window_days = args.window_days if args.window_days is not None else 30
     
     processing_dt = datetime.strptime(processing_date, "%Y-%m-%d")
