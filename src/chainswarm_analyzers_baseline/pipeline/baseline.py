@@ -27,6 +27,7 @@ class PatternAnalyzerProtocol(Protocol):
         self,
         money_flows: List[Dict[str, Any]],
         address_labels: Dict[str, Dict[str, Any]],
+        timestamp_data: Dict[str, List[Dict[str, Any]]],
         window_days: int,
         processing_date: str
     ) -> List[Dict[str, Any]]:
@@ -55,47 +56,27 @@ class BaselineAnalyzersPipeline:
         run_features: bool = True,
         run_patterns: bool = True,
     ) -> Dict[str, Any]:
-        start_time = time.time()
         
-        logger.info(
-            f"Starting pipeline: window_days={window_days}, "
-            f"processing_date={processing_date}, network={self.network}"
-        )
-        logger.info(
-            f"Time range: {start_timestamp_ms} to {end_timestamp_ms}"
-        )
+        money_flows = self.adapter.read_money_flows(start_timestamp_ms, end_timestamp_ms)
+        logger.info(f"Loaded {len(money_flows)} money flows from MV")
+        
+        graph = build_money_flow_graph(money_flows)
+        addresses = extract_addresses_from_flows(money_flows)
+        address_labels = self.adapter.read_address_labels(addresses)
+        
+        transfer_aggregates = {}
+        timestamp_data = {}
+        
+        if run_patterns:
+            transfers = self.adapter.read_transfers(start_timestamp_ms, end_timestamp_ms)
+            transfer_aggregates = compute_transfer_aggregates(transfers)
+            timestamp_data = self.adapter.read_transfer_timestamps(
+                start_timestamp_ms, end_timestamp_ms, addresses
+            )
+            logger.info(f"Loaded transfer data for burst detection")
         
         features_count = 0
         patterns_count = 0
-        
-        logger.info("Loading transfers...")
-        transfers = self.adapter.read_transfers(start_timestamp_ms, end_timestamp_ms)
-        logger.info(f"Loaded {len(transfers)} transfers")
-        
-        if not transfers:
-            raise ValueError(f"No transfers found in time range {start_timestamp_ms} to {end_timestamp_ms}")
-        
-        logger.info("Computing transfer aggregates...")
-        transfer_aggregates = compute_transfer_aggregates(transfers)
-        logger.info(f"Computed aggregates for {len(transfer_aggregates)} addresses")
-        
-        logger.info("Aggregating to money flows...")
-        money_flows = self.adapter.read_money_flows(start_timestamp_ms, end_timestamp_ms)
-        logger.info(f"Aggregated to {len(money_flows)} money flows")
-        
-        if not money_flows:
-            raise ValueError(f"No money flows found in time range {start_timestamp_ms} to {end_timestamp_ms}")
-        
-        addresses = extract_addresses_from_flows(money_flows)
-        logger.info(f"Found {len(addresses)} unique addresses")
-        
-        logger.info("Loading address labels...")
-        address_labels = self.adapter.read_address_labels(addresses)
-        logger.info(f"Loaded labels for {len(address_labels)} addresses")
-        
-        logger.info("Building transaction graph...")
-        graph = build_money_flow_graph(money_flows)
-        logger.info(f"Graph built: {graph.number_of_nodes()} nodes, {graph.number_of_edges()} edges")
         
         if run_features:
             features_count = self._run_feature_analysis(
@@ -110,21 +91,14 @@ class BaselineAnalyzersPipeline:
             patterns_count = self._run_pattern_analysis(
                 money_flows=money_flows,
                 address_labels=address_labels,
+                timestamp_data=timestamp_data,
                 window_days=window_days,
                 processing_date=processing_date,
             )
         
-        duration = time.time() - start_time
-        
-        logger.info(
-            f"Pipeline complete: {features_count} features, "
-            f"{patterns_count} patterns in {duration:.2f}s"
-        )
-        
         return {
-            "features_count": features_count,
-            "patterns_count": patterns_count,
-            "duration_seconds": duration
+            'features_count': features_count,
+            'patterns_count': patterns_count,
         }
     
     def run_features_only(
@@ -194,28 +168,20 @@ class BaselineAnalyzersPipeline:
         self,
         money_flows: List[Dict[str, Any]],
         address_labels: Dict[str, Dict[str, Any]],
+        timestamp_data: Dict[str, List[Dict[str, Any]]],
         window_days: int,
         processing_date: str,
     ) -> int:
-        logger.info("Running pattern analysis...")
         
         patterns = self.pattern_analyzer.analyze(
             money_flows=money_flows,
             address_labels=address_labels,
+            timestamp_data=timestamp_data,
             window_days=window_days,
             processing_date=processing_date
         )
         
-        if patterns:
-            logger.info(f"Writing {len(patterns)} patterns...")
-            self.adapter.write_patterns(
-                patterns=patterns,
-                window_days=window_days,
-                processing_date=processing_date
-            )
-            logger.info(f"Pattern analysis complete: {len(patterns)} patterns")
-        else:
-            logger.info("No patterns detected")
+        self.adapter.write_patterns(patterns, window_days, processing_date)
         
         return len(patterns)
 

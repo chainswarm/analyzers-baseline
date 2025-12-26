@@ -26,17 +26,12 @@ class BurstDetector(BasePatternDetector):
         G: nx.DiGraph,
         address_labels: Dict[str, Dict[str, Any]],
         window_days: int,
-        processing_date: str
+        processing_date: str,
+        timestamp_data: Dict[str, List[Dict[str, Any]]]
     ) -> List[Dict[str, Any]]:
         self._address_labels_cache = address_labels
         
         if G.number_of_nodes() == 0:
-            return []
-        
-        if not self._has_timestamp_data(G):
-            logger.warning(
-                "BurstDetector requires timestamp data on edges, returning empty list"
-            )
             return []
         
         patterns_by_hash = {}
@@ -55,8 +50,12 @@ class BurstDetector(BasePatternDetector):
         )
         
         for node in G.nodes():
+            node_timestamps = timestamp_data.get(node, [])
+            if not node_timestamps:
+                continue
+            
             burst_pattern = self._analyze_temporal_bursts(
-                G, node, time_window_seconds, min_burst_intensity,
+                node, node_timestamps, time_window_seconds, min_burst_intensity,
                 min_burst_transactions, z_score_threshold
             )
             
@@ -110,39 +109,19 @@ class BurstDetector(BasePatternDetector):
         logger.info(f"Detected {len(patterns_by_hash)} burst patterns")
         return list(patterns_by_hash.values())
 
-    def _has_timestamp_data(self, G: nx.DiGraph) -> bool:
-        for u, v, data in G.edges(data=True):
-            if any(key in data for key in ['timestamps', 'timestamp', 'block_timestamp']):
-                return True
-            return False
-        return False
-
     def _analyze_temporal_bursts(
         self,
-        G: nx.DiGraph,
         node: str,
+        timestamp_data: List[Dict[str, Any]],
         time_window: int,
         min_intensity: float,
         min_transactions: int,
         z_threshold: float
     ) -> Optional[Dict[str, Any]]:
-        timestamps = []
-        volumes = []
-        counterparties = []
         
-        for source, _, data in G.in_edges(node, data=True):
-            ts = self._get_timestamp(data)
-            if ts:
-                timestamps.append(ts)
-                volumes.append(data.get('amount_usd_sum', 0))
-                counterparties.append(source)
-        
-        for _, target, data in G.out_edges(node, data=True):
-            ts = self._get_timestamp(data)
-            if ts:
-                timestamps.append(ts)
-                volumes.append(data.get('amount_usd_sum', 0))
-                counterparties.append(target)
+        timestamps = [t['timestamp'] for t in timestamp_data]
+        volumes = [t['volume'] for t in timestamp_data]
+        counterparties = [t['counterparty'] for t in timestamp_data]
         
         if len(timestamps) < min_transactions:
             return None
@@ -158,15 +137,6 @@ class BurstDetector(BasePatternDetector):
         )
         
         return burst
-
-    def _get_timestamp(self, edge_data: Dict) -> Optional[int]:
-        for field in ['timestamp', 'block_timestamp', 'timestamps']:
-            if field in edge_data:
-                ts = edge_data[field]
-                if isinstance(ts, (list, tuple)):
-                    return ts[0] if ts else None
-                return ts
-        return None
 
     def _find_burst_window(
         self,

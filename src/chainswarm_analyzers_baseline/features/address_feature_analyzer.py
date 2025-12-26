@@ -44,6 +44,7 @@ class AddressFeatureAnalyzer:
             graph_features = graph_analytics.get(address, self._empty_graph_features())
             directional_features = self._compute_directional_flow_features(address, flows)
             behavioral_features = self._compute_behavioral_features(address, flows, aggregates)
+            edge_features = self._compute_edge_features(address, graph)
             
             label_info = address_labels.get(address, {})
             label_features = self._compute_label_features(address, label_info)
@@ -57,6 +58,7 @@ class AddressFeatureAnalyzer:
                 **graph_features,
                 **directional_features,
                 **behavioral_features,
+                **edge_features,
                 **label_features,
             }
             
@@ -481,6 +483,70 @@ class AddressFeatureAnalyzer:
             'asset_diversity_score': 0.0,
             'first_activity_timestamp': first_timestamp,
             'last_activity_timestamp': last_timestamp,
+        }
+    
+    def _compute_edge_features(self, address: str, graph: nx.DiGraph) -> Dict[str, Any]:
+        in_edges = list(graph.in_edges(address, data=True))
+        out_edges = list(graph.out_edges(address, data=True))
+        all_edges = in_edges + out_edges
+        
+        if not all_edges:
+            return {
+                'avg_relationship_age_days': 0,
+                'max_relationship_age_days': 0,
+                'bidirectional_relationship_ratio': 0.0,
+                'avg_edge_reciprocity': 0.0,
+                'multi_asset_edge_ratio': 0.0,
+                'edge_hourly_entropy': 0.0,
+                'edge_weekly_entropy': 0.0,
+            }
+        
+        relationship_ages = []
+        bidirectional_count = 0
+        reciprocity_scores = []
+        multi_asset_count = 0
+        aggregate_hourly = [0] * 24
+        aggregate_weekly = [0] * 7
+        
+        for _, _, data in all_edges:
+            first_seen = data['first_seen_timestamp']
+            last_seen = data['last_seen_timestamp']
+            if first_seen > 0:
+                age_days = (last_seen - first_seen) / 86400000
+                relationship_ages.append(age_days)
+            
+            if data.get('is_bidirectional', False):
+                bidirectional_count += 1
+            
+            reciprocity_scores.append(data.get('reciprocity_ratio', 0.0))
+            
+            if data.get('unique_assets', 0) > 1:
+                multi_asset_count += 1
+            
+            hourly = data.get('hourly_pattern', [0] * 24)
+            weekly = data.get('weekly_pattern', [0] * 7)
+            for i in range(24):
+                aggregate_hourly[i] += hourly[i]
+            for i in range(7):
+                aggregate_weekly[i] += weekly[i]
+        
+        avg_relationship_age = sum(relationship_ages) / len(relationship_ages) if relationship_ages else 0
+        max_relationship_age = max(relationship_ages) if relationship_ages else 0
+        bidirectional_ratio = bidirectional_count / len(all_edges)
+        avg_reciprocity = sum(reciprocity_scores) / len(reciprocity_scores)
+        multi_asset_ratio = multi_asset_count / len(all_edges)
+        
+        hourly_entropy = self._calculate_entropy(aggregate_hourly)
+        weekly_entropy = self._calculate_entropy(aggregate_weekly)
+        
+        return {
+            'avg_relationship_age_days': int(avg_relationship_age),
+            'max_relationship_age_days': int(max_relationship_age),
+            'bidirectional_relationship_ratio': float(bidirectional_ratio),
+            'avg_edge_reciprocity': float(avg_reciprocity),
+            'multi_asset_edge_ratio': float(multi_asset_ratio),
+            'edge_hourly_entropy': float(hourly_entropy),
+            'edge_weekly_entropy': float(weekly_entropy),
         }
     
     def _compute_label_features(

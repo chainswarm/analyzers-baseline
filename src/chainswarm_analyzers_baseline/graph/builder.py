@@ -11,15 +11,36 @@ def build_money_flow_graph(money_flows: List[Dict[str, Any]]) -> nx.DiGraph:
     for flow in money_flows:
         from_addr = flow['from_address']
         to_addr = flow['to_address']
-        amount_usd_sum = float(flow.get('amount_usd_sum', 0.0))
-        tx_count = int(flow.get('tx_count', 0))
+        amount_usd_sum = float(flow['amount_usd_sum'])
+        tx_count = int(flow['tx_count'])
+        first_seen = int(flow['first_seen_timestamp'])
+        last_seen = int(flow['last_seen_timestamp'])
+        active_days = int(flow['active_days'])
+        avg_tx_size = float(flow['avg_tx_size_usd'])
+        unique_assets = int(flow['unique_assets'])
+        dominant_asset = flow['dominant_asset']
+        hourly_pattern = flow['hourly_pattern']
+        weekly_pattern = flow['weekly_pattern']
+        reciprocity_ratio = float(flow['reciprocity_ratio'])
+        is_bidirectional = bool(flow['is_bidirectional'])
         
         G.add_edge(
             from_addr,
             to_addr,
             weight=amount_usd_sum,
             amount_usd_sum=amount_usd_sum,
-            tx_count=tx_count
+            tx_count=tx_count,
+            first_seen_timestamp=first_seen,
+            last_seen_timestamp=last_seen,
+            active_days=active_days,
+            relationship_age_days=(last_seen - first_seen) / 86400000 if first_seen > 0 else 0,
+            avg_tx_size_usd=avg_tx_size,
+            unique_assets=unique_assets,
+            dominant_asset=dominant_asset,
+            hourly_pattern=hourly_pattern,
+            weekly_pattern=weekly_pattern,
+            reciprocity_ratio=reciprocity_ratio,
+            is_bidirectional=is_bidirectional
         )
     
     logger.info(f"Graph built: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")

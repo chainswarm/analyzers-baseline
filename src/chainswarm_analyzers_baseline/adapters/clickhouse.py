@@ -76,12 +76,21 @@ class ClickHouseAdapter:
             SELECT
                 from_address,
                 to_address,
-                sum(amount_usd) AS amount_usd_sum,
-                count() AS tx_count
-            FROM core_transfers FINAL
-            WHERE block_timestamp >= %(start_ts)s
-              AND block_timestamp < %(end_ts)s
-            GROUP BY from_address, to_address
+                tx_count,
+                amount_usd_sum,
+                first_seen_timestamp,
+                last_seen_timestamp,
+                active_days,
+                avg_tx_size_usd,
+                unique_assets,
+                dominant_asset,
+                hourly_pattern,
+                weekly_pattern,
+                reciprocity_ratio,
+                is_bidirectional
+            FROM core_money_flows_view FINAL
+            WHERE last_seen_timestamp >= %(start_ts)s
+              AND last_seen_timestamp < %(end_ts)s
         """
         
         params = {
@@ -92,9 +101,54 @@ class ClickHouseAdapter:
         result = self.client.query(query, parameters=params)
         money_flows = [row_to_dict(row, result.column_names) for row in result.result_rows]
         
-        logger.info(f"Aggregated to {len(money_flows)} money flows from ClickHouse")
+        logger.info(f"Read {len(money_flows)} money flows from MV")
         
         return money_flows
+    
+    def read_transfer_timestamps(
+        self,
+        start_timestamp_ms: int,
+        end_timestamp_ms: int,
+        addresses: List[str]
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        if not addresses:
+            return {}
+        
+        address_list = ", ".join([f"'{addr}'" for addr in addresses])
+        
+        query = f"""
+            SELECT
+                multiIf(from_address IN ({address_list}), from_address, to_address) AS address,
+                block_timestamp,
+                amount_usd,
+                multiIf(from_address IN ({address_list}), to_address, from_address) AS counterparty
+            FROM core_transfers FINAL
+            WHERE block_timestamp >= %(start_ts)s
+              AND block_timestamp < %(end_ts)s
+              AND (from_address IN ({address_list}) OR to_address IN ({address_list}))
+            ORDER BY address, block_timestamp
+        """
+        
+        params = {
+            'start_ts': int(start_timestamp_ms),
+            'end_ts': int(end_timestamp_ms),
+        }
+        
+        result = self.client.query(query, parameters=params)
+        
+        address_timestamps = defaultdict(list)
+        for row in result.result_rows:
+            row_dict = row_to_dict(row, result.column_names)
+            address = row_dict['address']
+            address_timestamps[address].append({
+                'timestamp': row_dict['block_timestamp'],
+                'volume': float(row_dict['amount_usd']),
+                'counterparty': row_dict['counterparty']
+            })
+        
+        logger.info(f"Read timestamps for {len(address_timestamps)} addresses")
+        
+        return dict(address_timestamps)
     
     def read_assets(self, network: Optional[str] = None) -> List[Dict[str, Any]]:
         if network:
@@ -243,6 +297,13 @@ class ClickHouseAdapter:
             'hourly_activity', 'daily_activity',
             'peak_activity_hour', 'peak_activity_day',
             'small_transaction_ratio', 'concentration_ratio',
+            'avg_relationship_age_days',
+            'max_relationship_age_days',
+            'bidirectional_relationship_ratio',
+            'avg_edge_reciprocity',
+            'multi_asset_edge_ratio',
+            'edge_hourly_entropy',
+            'edge_weekly_entropy',
             '_version'
         ]
         
@@ -330,6 +391,13 @@ class ClickHouseAdapter:
                     int(feature.get('peak_activity_day', 0)),
                     float(feature.get('small_transaction_ratio', 0.0)),
                     float(feature.get('concentration_ratio', 0.0)),
+                    int(feature.get('avg_relationship_age_days', 0)),
+                    int(feature.get('max_relationship_age_days', 0)),
+                    float(feature.get('bidirectional_relationship_ratio', 0.0)),
+                    float(feature.get('avg_edge_reciprocity', 0.0)),
+                    float(feature.get('multi_asset_edge_ratio', 0.0)),
+                    float(feature.get('edge_hourly_entropy', 0.0)),
+                    float(feature.get('edge_weekly_entropy', 0.0)),
                     _generate_version(),
                 ]
                 batch_data.append(row)

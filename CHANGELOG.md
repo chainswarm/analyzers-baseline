@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-12-26
+
+### Changed
+
+- **BREAKING**: `MoneyFlow` dataclass expanded from 4 to 15 fields - now includes edge-level temporal context, reciprocity metrics, and behavioral patterns from `core_money_flows_view`
+  - Added: `first_seen_timestamp`, `last_seen_timestamp`, `active_days`, `avg_tx_size_usd`
+  - Added: `unique_assets`, `dominant_asset`, `hourly_pattern[24]`, `weekly_pattern[7]`
+  - Added: `reciprocity_ratio`, `is_bidirectional`
+- **BREAKING**: `ClickHouseAdapter.read_money_flows()` now queries `core_money_flows_view` instead of re-aggregating `core_transfers`
+  - Returns lifetime aggregates for edges active in time window (semantic change)
+  - 5x faster query performance via pre-computed materialized view
+- **BREAKING**: `BurstDetector.detect()` signature now requires `timestamp_data` parameter
+  - Burst detection uses dedicated transfer timestamp query for precision
+  - Other pattern detectors unaffected (use MV graph)
+
+### Added
+
+- `ClickHouseAdapter.read_transfer_timestamps()` - Targeted query for burst detection temporal analysis
+- `AddressFeatureAnalyzer._compute_edge_features()` - 7 new relationship-context features:
+  - `avg_relationship_age_days`, `max_relationship_age_days` - Relationship maturity metrics
+  - `bidirectional_relationship_ratio`, `avg_edge_reciprocity` - Reciprocity analysis
+  - `multi_asset_edge_ratio` - Asset diversity across relationships
+  - `edge_hourly_entropy`, `edge_weekly_entropy` - Temporal pattern diversity
+- **Schema**: 7 new columns in `analyzers_features` table leveraging MV edge data
+
+### Performance
+
+- Overall pipeline speedup: ~5x (MV eliminates 4 of 5 transfer table scans)
+- Feature computation: Behavioral/temporal features now use pre-aggregated edge arrays
+- Graph building: 13 edge attributes from MV vs 2 from re-aggregation
+
 ## [0.1.3] - 2025-12-10
 
 ### Changed

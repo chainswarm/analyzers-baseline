@@ -80,6 +80,7 @@ class StructuralPatternAnalyzer:
         self,
         money_flows: List[Dict[str, Any]],
         address_labels: Dict[str, Dict[str, Any]],
+        timestamp_data: Dict[str, List[Dict[str, Any]]],
         window_days: int,
         processing_date: str
     ) -> List[Dict[str, Any]]:
@@ -94,12 +95,13 @@ class StructuralPatternAnalyzer:
         
         logger.info(f"Graph built: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
         
-        return self.analyze_graph(G, address_labels, window_days, processing_date)
+        return self.analyze_graph(G, address_labels, timestamp_data, window_days, processing_date)
 
     def analyze_graph(
         self,
         graph: nx.DiGraph,
         address_labels: Dict[str, Dict[str, Any]],
+        timestamp_data: Dict[str, List[Dict[str, Any]]],
         window_days: int,
         processing_date: str
     ) -> List[Dict[str, Any]]:
@@ -119,15 +121,14 @@ class StructuralPatternAnalyzer:
             try:
                 logger.info(f"Running {detector_name}")
                 
-                patterns = detector.detect(
-                    G=graph,
-                    address_labels=address_labels,
-                    window_days=window_days,
-                    processing_date=processing_date
-                )
+                if isinstance(detector, BurstDetector):
+                    patterns = detector.detect(graph, address_labels, window_days, processing_date, timestamp_data)
+                else:
+                    patterns = detector.detect(graph, address_labels, window_days, processing_date)
                 
-                logger.info(f"{detector_name}: detected {len(patterns)} patterns")
-                all_patterns.extend(patterns)
+                if patterns:
+                    all_patterns.extend(patterns)
+                    logger.info(f"{detector_name}: {len(patterns)} patterns")
                 
             except Exception as e:
                 logger.error(f"{detector_name} failed: {e}")
